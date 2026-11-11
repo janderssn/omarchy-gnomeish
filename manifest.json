@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "janderssn.workspace-switcher",
+  "name": "Workspace Switcher",
+  "version": "0.9.0",
+  "author": "janderssn",
+  "description": "GNOME-style Activities overview: tap Super to zoom out to your workspaces with live window previews, move between them with keys, scroll or swipe, and type to search apps",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "WorkspaceSwitcher.qml"
+  }
+}
