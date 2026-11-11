@@ -361,7 +361,7 @@ Item {
     // Hyprland answers the refreshes asynchronously; rebuild once they land.
     refreshTimer.restart()
     if (root.appLibrary) root.appLibrary.refreshIcons()
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+    Qt.callLater(function() { queryInput.forceActiveFocus() })
   }
 
   // The shell calls close() both when the plugin dismisses itself and when the
@@ -566,7 +566,10 @@ Item {
 
   // ---------------------------------------------------------------- search
 
+  // The query lives in the search field's text input, so that input methods
+  // and dictation can write to it; this keeps the two in step.
   function setQuery(next) {
+    if (queryInput.text !== next) queryInput.text = next
     root.query = next
     root.appIndex = 0
     root.rebuildApps()
@@ -576,7 +579,8 @@ Item {
   // starts with it, then the rest, each group in the app library's own order.
   // Two entries with the same name and icon are shown once.
   function rebuildApps() {
-    var q = root.query.trim().toLowerCase()
+    // Dictation writes sentences: "Chrome." should still find Chrome.
+    var q = root.query.trim().toLowerCase().replace(/[.,!?;:\s]+$/, "")
     if (!q) { root.apps = []; return }
     var found = []
     if (root.appLibrary) {
@@ -718,9 +722,9 @@ Item {
     Item {
       id: keyCatcher
       anchors.fill: parent
-      focus: true
 
-      Keys.priority: Keys.BeforeItem
+      // Keys arrive here first, forwarded by the search field's text input,
+      // which has the focus. Whatever is left unaccepted is typed into it.
       Keys.onPressed: function(event) {
         if (root.closing) { event.accepted = true; return }
         var key = Util.readingKey(event)
@@ -756,8 +760,10 @@ Item {
           event.accepted = true
         } else if (event.text === " " && !root.searching) {
           event.accepted = true
-        } else if (event.text && event.text.length === 1 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127) {
-          root.setQuery(root.query + event.text)
+        } else if ((event.key === Qt.Key_V && event.modifiers === (Qt.ControlModifier | Qt.ShiftModifier))
+            || (event.key === Qt.Key_Insert && event.modifiers === Qt.ShiftModifier)) {
+          // The terminal-style paste chords; plain Ctrl+V is the text input's own.
+          queryInput.paste()
           event.accepted = true
         }
       }
@@ -778,7 +784,7 @@ Item {
       border.width: root.searching ? 2 : 0
       border.color: root.accent
 
-      MouseArea { anchors.fill: parent; onClicked: keyCatcher.forceActiveFocus() }
+      MouseArea { anchors.fill: parent; onClicked: queryInput.forceActiveFocus() }
 
       // Magnifier, text and caret start at the left, for the placeholder and
       // for what is typed alike, so nothing jumps between the two.
@@ -816,22 +822,45 @@ Item {
           }
         }
 
-        Text {
-          textFormat: Text.PlainText
+        // A real text input, so text from an input method (fcitx5 composing,
+        // or dictation such as Superwhisper) lands here, not only key presses.
+        Item {
           anchors.verticalCenter: parent.verticalCenter
-          width: Math.min(implicitWidth, searchBox.width - Style.space(110))
-          text: root.searching ? root.query : strings.t("search")
-          color: root.textColor
-          opacity: root.searching ? 1 : 0.7
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.heading
-          elide: Text.ElideLeft
+          readonly property real maxWidth: searchBox.width - Style.space(110)
+          readonly property bool empty: queryInput.length === 0 && queryInput.preeditText.length === 0
+          width: empty ? placeholder.implicitWidth : Math.min(Math.ceil(queryInput.contentWidth) + 2, maxWidth)
+          height: Math.max(queryInput.implicitHeight, placeholder.implicitHeight)
+
+          Text {
+            id: placeholder
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            visible: parent.empty
+            text: strings.t("search")
+            color: root.textColor
+            opacity: 0.7
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.heading
+          }
+
+          FilterInput {
+            id: queryInput
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.empty ? 1 : parent.width
+            keyHandler: keyCatcher
+            maximumLength: 200
+            color: root.textColor
+            selectionColor: root.accent
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.heading
+            onTextChanged: if (text !== root.query) root.setQuery(text)
+          }
         }
 
         Rectangle {
           id: caret
           anchors.verticalCenter: parent.verticalCenter
-          visible: root.searching
+          visible: queryInput.length > 0 || queryInput.preeditText.length > 0
           // Sits right after the text, not a full gap away.
           transform: Translate { x: -Style.space(7) }
           width: 2
@@ -839,7 +868,7 @@ Item {
           color: root.accent
 
           SequentialAnimation on opacity {
-            running: root.opened && root.searching
+            running: root.opened && caret.visible
             loops: Animation.Infinite
             PauseAnimation { duration: 500 }
             NumberAnimation { to: 0; duration: 80 }

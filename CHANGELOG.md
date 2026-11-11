@@ -13,6 +13,7 @@ First packaged release.
 - The wallpaper darkens and blurs a little, slowly, as the overview opens; the `blur` setting sets the amount.
 - App search: results that start with what you typed come first, rows are centred, names wrap to two lines, the selection has an accent outline, the backdrop darkens further, and the search field has a magnifier and a caret.
 - Workspaces and search results crossfade.
+- The search field is a real text input, so input methods, dictation (for example Superwhisper) and paste work in it.
 - Colours follow the theme.
 - Animations follow `omarchy toggle animations`; the `animate` setting overrides it.
 - The spare workspace never takes an id used on another monitor.
