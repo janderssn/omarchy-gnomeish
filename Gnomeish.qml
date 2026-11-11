@@ -73,6 +73,12 @@ Item {
   }
 
   readonly property string animateMode: String(setting("animate", "auto")).toLowerCase()
+  // The part of the monitor windows live in: everything the bar does not
+  // reserve. A card is a miniature of this area, not of the whole monitor, so
+  // the gaps around its windows are even on all sides.
+  readonly property rect workRect: Qt.rect(reserved[0], reserved[1],
+    Math.max(1, monW - reserved[0] - reserved[2]), Math.max(1, monH - reserved[1] - reserved[3]))
+
   readonly property bool keepBar: String(setting("bar", "fade")).toLowerCase() === "keep"
     && barRect.width > 0 && barRect.height > 0
   // What the overview draws on and takes clicks in: the whole monitor, or
@@ -730,14 +736,17 @@ Item {
     ListView {
       id: strip
       visible: !root.searching
-      // The zoom: at progress 0 the current card covers the screen exactly,
+      // The zoom: at progress 0 the current card covers the work area exactly,
       // window for window; at 1 the strip sits at rest.
-      readonly property real fullZoom: panel.width / Math.max(1, cardWidth)
+      readonly property real fullZoom: root.workRect.width / Math.max(1, cardWidth)
       readonly property real zoom: 1 + (fullZoom - 1) * (1 - root.progress)
       readonly property real restCenterY: y + cardHeight / 2
       transform: [
         Scale { origin.x: strip.width / 2; origin.y: strip.cardHeight / 2; xScale: strip.zoom; yScale: strip.zoom },
-        Translate { y: (panel.height / 2 - strip.restCenterY) * (1 - root.progress) }
+        Translate {
+          x: (root.workRect.x + root.workRect.width / 2 - strip.width / 2) * (1 - root.progress)
+          y: (root.workRect.y + root.workRect.height / 2 - strip.restCenterY) * (1 - root.progress)
+        }
       ]
       orientation: ListView.Horizontal
       anchors.left: parent.left
@@ -793,10 +802,10 @@ Item {
 
       readonly property real cardWidth: {
         var byWidth = width * 0.62
-        var byHeight = (panel.height * 0.62) * root.monW / Math.max(1, root.monH)
+        var byHeight = (panel.height * 0.62) * root.workRect.width / root.workRect.height
         return Math.max(Style.space(200), Math.min(byWidth, byHeight))
       }
-      readonly property real cardHeight: cardWidth * root.monH / Math.max(1, root.monW)
+      readonly property real cardHeight: cardWidth * root.workRect.height / root.workRect.width
 
 
       delegate: Item {
@@ -811,7 +820,7 @@ Item {
           return true
         }
         readonly property bool current: index === root.wsIndex
-        readonly property real sc: strip.cardWidth / Math.max(1, root.monW)
+        readonly property real sc: strip.cardWidth / root.workRect.width
 
         width: strip.cardWidth
         height: strip.cardHeight + Style.space(24)
@@ -849,8 +858,8 @@ Item {
               required property var modelData
               readonly property bool ready: preview.hasContent || !modelData.toplevel
               onReadyChanged: if (ready) root.tryArm()
-              x: modelData.x * card.sc
-              y: modelData.y * card.sc
+              x: (modelData.x - root.workRect.x) * card.sc
+              y: (modelData.y - root.workRect.y) * card.sc
               width: Math.max(8, modelData.w * card.sc)
               height: Math.max(8, modelData.h * card.sc)
 
