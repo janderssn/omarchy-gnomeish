@@ -54,6 +54,7 @@ Optional. Add a `[gnomeish]` section to `~/.config/omarchy/shell.toml`; changes 
 animate = "auto"   # "auto" follows `omarchy toggle animations`; "always" or "never" override it
 dim = 0.5          # how much the wallpaper is darkened behind the workspaces, 0 to 1
 bar = "fade"       # "fade" hides the bar while the overview is open; "keep" leaves it showing and usable
+blur = 0.3         # slight blur that eases in on the wallpaper as the overview opens, 0 to 1; 0 turns it off
 ```
 
 ## What it reads and writes

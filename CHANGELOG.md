@@ -10,6 +10,9 @@ First packaged release.
 - The backdrop is the wallpaper, darkened; the amount is the `dim` setting.
 - The `bar` setting keeps the bar visible and usable instead of fading it.
 - A card is a miniature of the work area, without the bar's strip, so the gaps around its windows are even.
+- The wallpaper darkens and blurs a little, slowly, as the overview opens; the `blur` setting sets the amount.
+- App search: results that start with what you typed come first, rows are centred, names wrap to two lines, the selection has an accent outline, the backdrop darkens further, and the search field has a magnifier and a caret.
+- Workspaces and search results crossfade.
 - Colours follow the theme.
 - Animations follow `omarchy toggle animations`; the `animate` setting overrides it.
 - The spare workspace never takes an id used on another monitor.

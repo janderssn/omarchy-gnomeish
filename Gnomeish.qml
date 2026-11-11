@@ -3,6 +3,7 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import Quickshell.Io
 import QtQuick
+import QtQuick.Effects
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
@@ -66,6 +67,7 @@ Item {
   //   animate = "auto" | "always" | "never"   (auto follows `omarchy toggle animations`)
   //   dim     = 0.5                           (darkening of the wallpaper, 0 to 1)
   //   bar     = "fade" | "keep"               (fade the bar away, or leave it showing and usable)
+  //   blur    = 0.3                           (slight blur that eases in on the wallpaper, 0 to 1; 0 is off)
   function setting(key, fallback) {
     var values = Commons.Color.shellValues
     var value = values ? values["gnomeish." + key] : undefined
@@ -96,6 +98,29 @@ Item {
     var n = Number(setting("dim", "0.5"))
     return isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.5
   }
+
+  readonly property real blurAmount: {
+    var n = Number(setting("blur", "0.3"))
+    return isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.3
+  }
+
+  // The wallpaper settles slowly behind the zoom: `backdrop` runs 0 to 1 and
+  // drives both the darkening and the blur. Searching darkens it further so
+  // the results read clearly.
+  property real backdrop: 0
+  property real dimLevel: searching ? Math.max(backdropDim, 0.8) : backdropDim
+  Behavior on dimLevel { NumberAnimation { duration: root.duration(220); easing.type: Easing.OutCubic } }
+
+  NumberAnimation {
+    id: backdropAnim
+    target: root
+    property: "backdrop"
+    easing.type: Easing.OutCubic
+  }
+
+  // 0 while the workspaces show, 1 while the search results do.
+  property real searchMix: searching ? 1 : 0
+  Behavior on searchMix { NumberAnimation { duration: root.duration(160); easing.type: Easing.OutCubic } }
 
   function duration(ms) {
     if (animateMode === "always") return ms
@@ -167,8 +192,10 @@ Item {
 
   onOpenedChanged: {
     zoomAnim.stop()
+    backdropAnim.stop()
     armTimeout.stop()
     progress = 0
+    backdrop = 0
     armed = false
     closing = false
     shotWanted = opened && !keepBar && barRect.width > 0 && barRect.height > 0
@@ -187,12 +214,20 @@ Item {
       var shot = shotLoader.item
       if (!(shot && shot.hasContent)) root.shotWanted = false
       root.waitForCaptures = false
-      root.armed = true
-      zoomAnim.from = 0
-      zoomAnim.to = 1
-      zoomAnim.duration = root.duration(260)
-      zoomAnim.start()
+      root.startOpening()
     }
+  }
+
+  function startOpening() {
+    root.armed = true
+    zoomAnim.from = 0
+    zoomAnim.to = 1
+    zoomAnim.duration = root.duration(260)
+    zoomAnim.start()
+    backdropAnim.from = 0
+    backdropAnim.to = 1
+    backdropAnim.duration = root.duration(700)
+    backdropAnim.start()
   }
 
   NumberAnimation {
@@ -217,11 +252,7 @@ Item {
       var card = strip.currentItem
       if (!card || !card.previewsReady()) return
     }
-    root.armed = true
-    zoomAnim.from = 0
-    zoomAnim.to = 1
-    zoomAnim.duration = root.duration(260)
-    zoomAnim.start()
+    root.startOpening()
   }
 
   // Captures that do not arrive in time are not waited for. A late screen
@@ -264,6 +295,11 @@ Item {
     zoomAnim.to = 0
     zoomAnim.duration = root.duration(150)
     zoomAnim.start()
+    backdropAnim.stop()
+    backdropAnim.from = root.backdrop
+    backdropAnim.to = 0
+    backdropAnim.duration = root.duration(150)
+    backdropAnim.start()
   }
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
@@ -536,31 +572,47 @@ Item {
     root.rebuildApps()
   }
 
+  // Names that start with the query come first, then names with a word that
+  // starts with it, then the rest, each group in the app library's own order.
+  // Two entries with the same name and icon are shown once.
   function rebuildApps() {
-    var q = root.query.trim()
+    var q = root.query.trim().toLowerCase()
     if (!q) { root.apps = []; return }
-    var out = []
+    var found = []
     if (root.appLibrary) {
       var rows = root.appLibrary.sortedEntries(q)
-      for (var i = 0; i < rows.length && out.length < 24; i++) {
+      for (var i = 0; i < rows.length && i < 400; i++) {
         var entry = rows[i].entry
         if (!entry || !entry.id) continue
-        out.push({
+        found.push({
           id: String(entry.id),
-          name: root.appLibrary.entryName(entry) || String(entry.name || entry.id),
+          name: String(root.appLibrary.entryName(entry) || entry.name || entry.id).slice(0, 120),
           icon: root.appLibrary.iconSource(entry.icon)
         })
       }
     } else {
       var values = DesktopEntries.applications.values || []
-      var lower = q.toLowerCase()
-      for (var j = 0; j < values.length && out.length < 24; j++) {
+      for (var j = 0; j < values.length && found.length < 400; j++) {
         var e = values[j]
-        if (e.noDisplay || String(e.name).toLowerCase().indexOf(lower) < 0) continue
-        out.push({ id: String(e.id), name: String(e.name), icon: Quickshell.iconPath(e.icon, true) })
+        if (e.noDisplay || String(e.name).toLowerCase().indexOf(q) < 0) continue
+        found.push({ id: String(e.id), name: String(e.name).slice(0, 120), icon: Quickshell.iconPath(e.icon, true) })
       }
     }
-    root.apps = out
+
+    var tiers = [[], [], []]
+    var seen = {}
+    for (var k = 0; k < found.length; k++) {
+      var app = found[k]
+      var name = app.name.toLowerCase()
+      var key = name + "\n" + app.icon
+      if (seen[key]) continue
+      seen[key] = true
+      var tier = 2
+      if (name.indexOf(q) === 0) tier = 0
+      else if ((" " + name).indexOf(" " + q) >= 0) tier = 1
+      tiers[tier].push(app)
+    }
+    root.apps = tiers[0].concat(tiers[1], tiers[2]).slice(0, appGrid.columns * appGrid.maxRows)
   }
 
   // Apps installed after the shell started only get icons once the app
@@ -602,8 +654,8 @@ Item {
       height: root.stageRect.height
     }
 
-    // GNOME-style backdrop: the current wallpaper, sharp and dimmed. The dim
-    // fades in with the zoom, so the first frame matches the desktop. It is
+    // GNOME-style backdrop: the current wallpaper, which slowly darkens and
+    // blurs a little as the overview opens. It is
     // clipped to the stage, which leaves a kept bar uncovered.
     Item {
       x: root.stageRect.x
@@ -627,6 +679,8 @@ Item {
         Image {
           id: wallpaper
           anchors.fill: parent
+          // Drawn through the blur below when blur is on.
+          visible: root.blurAmount <= 0
           // Always loaded (the plugin is keepLoaded) and cached: no decode
           // work happens when the overview opens.
           source: root.wallpaperSource
@@ -637,9 +691,20 @@ Item {
           cache: true
         }
 
+        // Starts at no blur at all, so the first frame matches the desktop.
+        MultiEffect {
+          anchors.fill: parent
+          visible: root.blurAmount > 0 && wallpaper.status === Image.Ready
+          source: wallpaper
+          autoPaddingEnabled: false
+          blurEnabled: true
+          blurMax: 48
+          blur: root.blurAmount * root.backdrop
+        }
+
         Rectangle {
           anchors.fill: parent
-          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, root.backdropDim * root.progress)
+          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, root.dimLevel * root.backdrop)
         }
       }
     }
@@ -715,19 +780,73 @@ Item {
 
       MouseArea { anchors.fill: parent; onClicked: keyCatcher.forceActiveFocus() }
 
-      Text {
-        textFormat: Text.PlainText
-        anchors.fill: parent
-        anchors.leftMargin: Style.space(22)
-        anchors.rightMargin: Style.space(22)
-        verticalAlignment: Text.AlignVCenter
-        horizontalAlignment: root.searching ? Text.AlignLeft : Text.AlignHCenter
-        text: root.searching ? root.query : strings.t("search")
-        color: root.textColor
-        opacity: root.searching ? 1 : 0.7
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.heading
-        elide: Text.ElideLeft
+      // Magnifier, text and caret start at the left, for the placeholder and
+      // for what is typed alike, so nothing jumps between the two.
+      Row {
+        anchors.left: parent.left
+        anchors.leftMargin: Style.space(20)
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(10)
+
+        Item {
+          id: magnifier
+          readonly property real size: Style.font.heading
+          anchors.verticalCenter: parent.verticalCenter
+          width: size
+          height: size
+          opacity: root.searching ? 1 : 0.7
+
+          Rectangle {
+            width: magnifier.size * 0.7
+            height: width
+            radius: width / 2
+            color: "transparent"
+            border.width: 2
+            border.color: root.textColor
+          }
+          Rectangle {
+            x: magnifier.size * 0.55
+            y: magnifier.size * 0.72
+            width: magnifier.size * 0.42
+            height: 2
+            radius: 1
+            color: root.textColor
+            rotation: 45
+            transformOrigin: Item.Left
+          }
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          anchors.verticalCenter: parent.verticalCenter
+          width: Math.min(implicitWidth, searchBox.width - Style.space(110))
+          text: root.searching ? root.query : strings.t("search")
+          color: root.textColor
+          opacity: root.searching ? 1 : 0.7
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.heading
+          elide: Text.ElideLeft
+        }
+
+        Rectangle {
+          id: caret
+          anchors.verticalCenter: parent.verticalCenter
+          visible: root.searching
+          // Sits right after the text, not a full gap away.
+          transform: Translate { x: -Style.space(7) }
+          width: 2
+          height: Style.font.heading * 1.2
+          color: root.accent
+
+          SequentialAnimation on opacity {
+            running: root.opened && root.searching
+            loops: Animation.Infinite
+            PauseAnimation { duration: 500 }
+            NumberAnimation { to: 0; duration: 80 }
+            PauseAnimation { duration: 420 }
+            NumberAnimation { to: 1; duration: 80 }
+          }
+        }
       }
     }
 
@@ -735,7 +854,9 @@ Item {
 
     ListView {
       id: strip
-      visible: !root.searching
+      visible: root.searchMix < 1
+      enabled: !root.searching
+      opacity: 1 - root.searchMix
       // The zoom: at progress 0 the current card covers the work area exactly,
       // window for window; at 1 the strip sits at rest.
       readonly property real fullZoom: root.workRect.width / Math.max(1, cardWidth)
@@ -977,7 +1098,7 @@ Item {
     // Accepts no buttons, so clicks, hover and touchscreen swipes pass through.
     MouseArea {
       id: wheelCatcher
-      visible: strip.visible
+      visible: !root.searching
       anchors.fill: strip
       acceptedButtons: Qt.NoButton
 
@@ -1018,8 +1139,8 @@ Item {
 
     // Workspace dots, like GNOME's overview indicator.
     Row {
-      visible: !root.searching && root.workspaces.length > 1
-      opacity: root.progress
+      visible: root.searchMix < 1 && root.workspaces.length > 1
+      opacity: root.progress * (1 - root.searchMix)
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.top: strip.bottom
       anchors.topMargin: Style.space(18)
@@ -1040,71 +1161,84 @@ Item {
 
     // ---------------------------------------------------- app results
 
-    GridView {
+    // Up to three rows, each centred, so a short last row does not hang left.
+    Item {
       id: appGrid
-      visible: root.searching
+      readonly property real cellWidth: Style.space(140)
+      readonly property real cellHeight: Style.space(150)
+      readonly property int maxRows: 3
+      readonly property int columns: Math.max(1, Math.min(6, Math.floor((parent.width * 0.8) / cellWidth)))
+      visible: root.searchMix > 0
+      enabled: root.searching
+      opacity: root.searchMix
       anchors.top: searchBox.bottom
       anchors.topMargin: Style.space(40)
       anchors.horizontalCenter: parent.horizontalCenter
-      readonly property int columns: Math.max(1, Math.min(6, Math.floor((parent.width * 0.8) / cellWidth)))
       width: columns * cellWidth
-      height: parent.height - y - Style.space(40)
-      cellWidth: Style.space(132)
-      cellHeight: Style.space(132)
-      clip: true
-      model: root.apps
-      currentIndex: root.appIndex
-      boundsBehavior: Flickable.StopAtBounds
+      height: maxRows * cellHeight
 
-      delegate: Item {
-        id: appCell
-        required property int index
-        required property var modelData
-        width: appGrid.cellWidth
-        height: appGrid.cellHeight
+      Repeater {
+        model: root.apps
 
-        Rectangle {
-          anchors.fill: parent
-          anchors.margins: Style.space(6)
-          radius: root.radius
-          color: appCell.index === root.appIndex ? root.tint(0.16)
-            : (appMouse.containsMouse ? root.tint(0.08) : "transparent")
-        }
+        delegate: Item {
+          id: appCell
+          required property int index
+          required property var modelData
+          readonly property bool selected: index === root.appIndex
+          readonly property int row: Math.floor(index / appGrid.columns)
+          readonly property int inRow: Math.min(appGrid.columns, root.apps.length - row * appGrid.columns)
+          x: (appGrid.width - inRow * appGrid.cellWidth) / 2 + (index % appGrid.columns) * appGrid.cellWidth
+          y: row * appGrid.cellHeight
+          width: appGrid.cellWidth
+          height: appGrid.cellHeight
 
-        Image {
-          id: appIcon
-          anchors.horizontalCenter: parent.horizontalCenter
-          anchors.top: parent.top
-          anchors.topMargin: Style.space(16)
-          width: Style.space(64)
-          height: Style.space(64)
-          sourceSize.width: width * 2
-          sourceSize.height: height * 2
-          source: appCell.modelData.icon
-          fillMode: Image.PreserveAspectFit
-          asynchronous: true
-        }
+          Rectangle {
+            anchors.fill: parent
+            anchors.margins: Style.space(5)
+            radius: root.radius
+            color: appCell.selected ? root.tint(0.14)
+              : (appMouse.containsMouse ? root.tint(0.07) : "transparent")
+            border.width: appCell.selected ? 2 : 0
+            border.color: root.accent
+          }
 
-        Text {
-          textFormat: Text.PlainText
-          anchors.top: appIcon.bottom
-          anchors.topMargin: Style.space(8)
-          anchors.horizontalCenter: parent.horizontalCenter
-          width: parent.width - Style.space(16)
-          horizontalAlignment: Text.AlignHCenter
-          text: appCell.modelData.name
-          color: root.textColor
-          elide: Text.ElideRight
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-        }
+          Image {
+            id: appIcon
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.top
+            anchors.topMargin: Style.space(20)
+            width: Style.space(64)
+            height: Style.space(64)
+            sourceSize.width: width * 2
+            sourceSize.height: height * 2
+            source: appCell.modelData.icon
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+          }
 
-        MouseArea {
-          id: appMouse
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.launchApp(appCell.index)
+          Text {
+            textFormat: Text.PlainText
+            anchors.top: appIcon.bottom
+            anchors.topMargin: Style.space(8)
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width - Style.space(20)
+            horizontalAlignment: Text.AlignHCenter
+            text: appCell.modelData.name
+            color: root.textColor
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+            maximumLineCount: 2
+            elide: Text.ElideRight
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+          }
+
+          MouseArea {
+            id: appMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.launchApp(appCell.index)
+          }
         }
       }
     }
@@ -1115,7 +1249,7 @@ Item {
       anchors.centerIn: parent
       text: strings.t("noResults").arg(root.query)
       color: root.textColor
-      opacity: 0.6
+      opacity: 0.6 * root.searchMix
       font.family: root.fontFamily
       font.pixelSize: Style.font.title
     }
