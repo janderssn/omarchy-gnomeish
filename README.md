@@ -1,8 +1,8 @@
-# Workspace Switcher
+# Gnomeish Workspace Overview
 
 A GNOME-style Activities overview for [Omarchy](https://omarchy.org/). Tap a key and the current workspace shrinks into a row of workspaces with live window previews. Pick one, or start typing to launch an app.
 
-![The workspace switcher open, with the selected workspace in the middle](preview.png)
+![The workspace overview open, with the selected workspace in the middle](preview.png)
 
 ## Features
 
@@ -22,7 +22,7 @@ Omarchy 4.5 or later. It uses only what Omarchy ships; there is nothing else to 
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/janderssn/omarchy-workspace-switcher.git --enable
+omarchy plugin add https://github.com/janderssn/omarchy-gnomeish.git --enable
 ```
 
 Installing does not change your configuration. To open the overview you add a key binding yourself.
@@ -32,25 +32,25 @@ Installing does not change your configuration. To open the overview you add a ke
 For GNOME's "tap Super", add this to the end of `~/.config/hypr/bindings.lua`:
 
 ```lua
--- Tap Super on its own to open or close the workspace switcher. It fires on
+-- Tap Super on its own to open or close the workspace overview. It fires on
 -- release, so Super+key combinations keep working.
-o.bind("SUPER + SUPER_L", "Workspace switcher", { panel = "janderssn.workspace-switcher" }, { release = true })
+o.bind("SUPER + SUPER_L", "Workspace overview", { panel = "janderssn.gnomeish" }, { release = true })
 ```
 
-Any other key works the same way, for example `o.bind("SUPER + TAB", "Workspace switcher", { panel = "janderssn.workspace-switcher" })`.
+Any other key works the same way, for example `o.bind("SUPER + TAB", "Workspace overview", { panel = "janderssn.gnomeish" })`.
 
 To open it from a script:
 
 ```bash
-omarchy-shell shell toggle janderssn.workspace-switcher '{}'
+omarchy-shell shell toggle janderssn.gnomeish '{}'
 ```
 
 ## Settings
 
-Optional. Add a `[workspace-switcher]` section to `~/.config/omarchy/shell.toml`; changes apply at once.
+Optional. Add a `[gnomeish]` section to `~/.config/omarchy/shell.toml`; changes apply at once.
 
 ```toml
-[workspace-switcher]
+[gnomeish]
 animate = "auto"   # "auto" follows `omarchy toggle animations`; "always" or "never" override it
 dim = 0.5          # how much the wallpaper is darkened behind the workspaces, 0 to 1
 bar = "fade"       # "fade" hides the bar while the overview is open; "keep" leaves it showing and usable
@@ -66,16 +66,16 @@ bar = "fade"       # "fade" hides the bar while the overview is open; "keep" lea
 ## Update
 
 ```bash
-omarchy plugin update janderssn.workspace-switcher
+omarchy plugin update janderssn.gnomeish
 ```
 
 ## Remove
 
 ```bash
-omarchy plugin remove janderssn.workspace-switcher
+omarchy plugin remove janderssn.gnomeish
 ```
 
-The plugin leaves nothing behind of its own. Two things you added by hand stay until you delete them: the binding line in `~/.config/hypr/bindings.lua` and the `[workspace-switcher]` section in `~/.config/omarchy/shell.toml`.
+The plugin leaves nothing behind of its own. Two things you added by hand stay until you delete them: the binding line in `~/.config/hypr/bindings.lua` and the `[gnomeish]` section in `~/.config/omarchy/shell.toml`.
 
 ## Limits
 

@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "id": "janderssn.workspace-switcher",
-  "name": "Workspace Switcher",
+  "id": "janderssn.gnomeish",
+  "name": "Gnomeish Workspace Overview",
   "version": "0.9.0",
   "author": "janderssn",
   "description": "GNOME-style Activities overview: tap Super to zoom out to your workspaces with live window previews, move between them with keys, scroll or swipe, and type to search apps",
   "license": "MIT",
-  "homepage": "https://github.com/janderssn/omarchy-workspace-switcher",
+  "homepage": "https://github.com/janderssn/omarchy-gnomeish",
   "kinds": [
     "overlay"
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "WorkspaceSwitcher.qml"
+    "overlay": "Gnomeish.qml"
   }
 }

@@ -7,7 +7,7 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 
-// Workspace Switcher: a GNOME-style Activities overview for Omarchy.
+// Gnomeish Workspace Overview: a GNOME-style Activities overview for Omarchy.
 //  - Workspaces as large cards with live window previews, current one centered.
 //  - Left/Right, scroll wheel / touchpad, or swipe to move between workspaces;
 //    Enter or click to go there; click a window to focus it.
@@ -18,7 +18,7 @@ Item {
 
   property var shell: null
   property var manifest: null
-  readonly property string pluginId: (manifest && manifest.id) || "janderssn.workspace-switcher"
+  readonly property string pluginId: (manifest && manifest.id) || "janderssn.gnomeish"
   readonly property var appLibrary: shell ? shell.appLibrary : null
 
   property bool opened: false
@@ -62,13 +62,13 @@ Item {
   }
 
   // ---------------------------------------------------------------- settings
-  // Optional, from an [workspace-switcher] section in ~/.config/omarchy/shell.toml:
+  // Optional, from an [gnomeish] section in ~/.config/omarchy/shell.toml:
   //   animate = "auto" | "always" | "never"   (auto follows `omarchy toggle animations`)
   //   dim     = 0.5                           (darkening of the wallpaper, 0 to 1)
   //   bar     = "fade" | "keep"               (fade the bar away, or leave it showing and usable)
   function setting(key, fallback) {
     var values = Commons.Color.shellValues
-    var value = values ? values["workspace-switcher." + key] : undefined
+    var value = values ? values["gnomeish." + key] : undefined
     return typeof value === "string" && value.length > 0 ? value : fallback
   }
 
@@ -584,7 +584,7 @@ Item {
   OverlayWindow {
     id: panel
     shown: root.opened
-    WlrLayershell.namespace: "workspace-switcher"
+    WlrLayershell.namespace: "gnomeish"
 
     // With the bar kept, clicks on it go to the bar.
     mask: root.keepBar ? stageRegion : null
