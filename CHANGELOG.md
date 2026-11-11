@@ -12,4 +12,5 @@ First packaged release.
 - Colours follow the theme.
 - Animations follow `omarchy toggle animations`; the `animate` setting overrides it.
 - The spare workspace never takes an id used on another monitor.
+- Output of helper processes is capped, commands are run without a shell, and only integer workspace ids and hex window addresses reach Hyprland.
 - Translations: Danish, Dutch, Finnish, French, German, Italian, Norwegian, Polish, Portuguese, Brazilian Portuguese, Spanish and Swedish.

@@ -111,23 +111,33 @@ Item {
 
   Process {
     id: borderOptions
-    command: ["hyprctl", "-j", "--batch",
-      "getoption general:border_size ; getoption general:col.active_border ; getoption general:col.inactive_border"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var chunks = String(text || "").split(/\n\s*\n/)
-        for (var i = 0; i < chunks.length; i++) {
-          var option = null
-          try { option = JSON.parse(chunks[i]) } catch (e) { continue }
-          if (!option || !option.option) continue
-          if (option.option === "general:border_size") root.borderSize = Number(option.int || 0)
-          else if (option.option === "general:col.active_border") {
-            var active = root.hyprColor(option)
-            if (active) root.activeBorder = active
-          } else if (option.option === "general:col.inactive_border") {
-            var inactive = root.hyprColor(option)
-            if (inactive) root.inactiveBorder = inactive
-          }
+    property string buffer: ""
+    command: ["sh", "-c",
+      "hyprctl -j --batch 'getoption general:border_size ; getoption general:col.active_border ; getoption general:col.inactive_border' | head -c 4097"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        if (borderOptions.buffer.length <= root.maxOutput) borderOptions.buffer += chunk
+      }
+    }
+    onExited: {
+      var text = buffer
+      buffer = ""
+      if (text.length === 0 || text.length > root.maxOutput) return
+      var chunks = text.split(/\n\s*\n/)
+      for (var i = 0; i < chunks.length; i++) {
+        var option = null
+        try { option = JSON.parse(chunks[i]) } catch (e) { continue }
+        if (!option || typeof option.option !== "string") continue
+        if (option.option === "general:border_size") {
+          var size = Number(option.int)
+          root.borderSize = isFinite(size) ? Math.max(0, Math.min(20, size)) : 0
+        } else if (option.option === "general:col.active_border") {
+          var active = root.hyprColor(option)
+          if (active) root.activeBorder = active
+        } else if (option.option === "general:col.inactive_border") {
+          var inactive = root.hyprColor(option)
+          if (inactive) root.inactiveBorder = inactive
         }
       }
     }
@@ -261,16 +271,29 @@ Item {
   property string wallpaperPath: ""
   property int wallpaperPxW: 0
   property int wallpaperPxH: 0
-  readonly property string wallpaperSource: wallpaperPath && wallpaperPxW > 0 ? "file://" + wallpaperPath : ""
+  readonly property string wallpaperSource: wallpaperPath && wallpaperPxW > 0
+    ? "file://" + wallpaperPath.split("/").map(encodeURIComponent).join("/") : ""
+
+  // Output of the two helper processes is capped where it is produced
+  // (head -c) and again as it is read, so nothing unbounded reaches the shell.
+  readonly property int maxOutput: 4096
 
   Process {
     id: wallpaperResolver
-    command: ["readlink", "-f", Quickshell.env("HOME") + "/.local/state/omarchy/current/background"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var path = String(text || "").trim()
-        if (path && path !== root.wallpaperPath) root.wallpaperPath = path
+    property string buffer: ""
+    command: ["sh", "-c", 'readlink -f -- "$1" | head -c 4097', "sh",
+      Quickshell.env("HOME") + "/.local/state/omarchy/current/background"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        if (wallpaperResolver.buffer.length <= root.maxOutput) wallpaperResolver.buffer += chunk
       }
+    }
+    onExited: {
+      var path = buffer.trim()
+      buffer = ""
+      if (path.length === 0 || path.length > root.maxOutput || path.charAt(0) !== "/") return
+      if (path !== root.wallpaperPath) root.wallpaperPath = path
     }
   }
 
@@ -329,8 +352,10 @@ Item {
   property int pendingWorkspace: -1
   property bool pendingViaShell: false
 
+  // Only an integer id or a hex window address is ever put into a dispatch.
   function focusWorkspaceExpr(id) {
-    return "hl.dsp.focus({ workspace = \"" + id + "\" })"
+    var n = Math.floor(Number(id))
+    return n >= 1 && n < 1000000 ? "hl.dsp.focus({ workspace = \"" + n + "\" })" : ""
   }
 
   function activeWorkspaceId() {
@@ -339,7 +364,7 @@ Item {
   }
 
   function switchThenHide(expressions, targetId, viaShell) {
-    for (var i = 0; i < expressions.length; i++) Hyprland.dispatch(expressions[i])
+    for (var i = 0; i < expressions.length; i++) if (expressions[i]) Hyprland.dispatch(expressions[i])
     if (targetId < 1 || targetId === root.activeWorkspaceId()) {
       root.finishSwitch(viaShell)
       return
@@ -424,7 +449,7 @@ Item {
       byId[w.id].windows.push({
         address: String(tl.address || info.address || ""),
         toplevel: tl.wayland || null,
-        title: String(tl.title || info.title || ""),
+        title: String(tl.title || info.title || "").slice(0, 200),
         x: Number(info.at[0]) - root.monX,
         y: Number(info.at[1]) - root.monY,
         w: Number(info.size[0]),
@@ -488,6 +513,7 @@ Item {
   function focusWindow(address) {
     if (!address) return
     if (address.indexOf("0x") !== 0) address = "0x" + address
+    if (!/^0x[0-9a-fA-F]{1,16}$/.test(address)) return
     var target = "window = \"address:" + address + "\""
     var ws = root.workspaces[root.wsIndex]
     root.switchThenHide([
@@ -550,7 +576,7 @@ Item {
     if (!app) return
     root.dismiss()
     if (root.appLibrary) root.appLibrary.launch(app.id, app.name)
-    else Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(app.id + ".desktop"))
+    else Quickshell.execDetached(["uwsm-app", "--", "gtk-launch", app.id + ".desktop"])
   }
 
   // ---------------------------------------------------------------- window
