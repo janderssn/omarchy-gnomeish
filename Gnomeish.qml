@@ -345,11 +345,38 @@ Item {
     root.rebuildWorkspaces()
   }
 
+  // ---------------------------------------------------------------- dictation
+
+  // Superwhisper outlines Hyprland's active window while it records, which
+  // while the overview is open is a window hidden behind it. While the
+  // overview is open, a helper (superwhisper-frame.py) hands Superwhisper the
+  // overview's monitor as the frame instead, so the glow surrounds the
+  // overview the way it surrounds a window. (The search field alone is too
+  // short for Superwhisper's glow, which is scaled to the frame.) Without
+  // Superwhisper nobody reads it and nothing changes.
+  Process {
+    id: dictationFrame
+    command: ["/usr/bin/python3",
+      decodeURIComponent(String(Qt.resolvedUrl("superwhisper-frame.py")).replace(/^file:\/\//, ""))]
+    running: root.opened
+    stdinEnabled: true
+    onRunningChanged: if (running) Qt.callLater(root.sendDictationFrame)
+  }
+
+  function sendDictationFrame() {
+    var monitor = Hyprland.focusedMonitor
+    if (!dictationFrame.running || !monitor) return
+    dictationFrame.write([monitor.name, Math.round(root.monX), Math.round(root.monY),
+      Math.round(root.monW), Math.round(root.monH)].join(" ") + "\n")
+  }
+
   // ---------------------------------------------------------------- state
 
   function open(payloadJson) {
     if (!wallpaperResolver.running) wallpaperResolver.running = true
     if (!borderOptions.running) borderOptions.running = true
+    // The field keeps its text while hidden; start each opening empty.
+    queryInput.text = ""
     root.query = ""
     root.apps = []
     root.appIndex = 0

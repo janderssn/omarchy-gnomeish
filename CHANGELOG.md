@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.1
+
+- Dictating with Superwhisper while the overview is open now glows around the screen instead of around the window hidden behind the overview.
+- The search field starts empty each time the overview opens.
+
 ## 0.9.0
 
 First packaged release.

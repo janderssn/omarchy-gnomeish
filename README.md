@@ -63,6 +63,7 @@ blur = 0.3         # slight blur that eases in on the wallpaper as the overview 
 - It reads the path of the current wallpaper and three Hyprland options (border size and the two border colours).
 - While the overview is open it captures the windows on your workspaces, and the bar, to draw the previews. The captures are held in memory only and dropped when it closes.
 - It asks Hyprland to focus a workspace or a window when you pick one, and launches the app you choose from search.
+- With [Superwhisper](https://superwhisper.com) installed, it runs a small helper (`superwhisper-frame.py`) while the overview is open. The helper tells Superwhisper to draw its recording glow around the overview's screen instead of around the window hidden behind the overview. The helper exits when the overview closes. It uses an undocumented Superwhisper interface, so a Superwhisper update could stop it working; the glow would then go back to outlining the hidden window.
 
 ## Update
 
