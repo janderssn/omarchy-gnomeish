@@ -976,6 +976,11 @@ Item {
       preferredHighlightEnd: (width + cardWidth) / 2
       highlightMoveDuration: snapping ? 0 : root.duration(220)
       boundsBehavior: Flickable.StopAtBounds
+      // A touch or drag still held when the overview hides never gets its
+      // release, and a strip that believes it is held stops sliding to the
+      // selection (it follows the finger instead). Going non-interactive
+      // while hidden cancels any such press, so every opening starts clean.
+      interactive: root.opened && !root.closing
 
       readonly property real cardWidth: {
         var byWidth = width * 0.62
